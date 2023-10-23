@@ -23,9 +23,13 @@ stack_top:
 # modules there. This lets the bootloader know it must avoid the addresses.
 .section .bss, "aw", @nobits
 	.align 4096
+.global boot_page_directory
 boot_page_directory:
 	.skip 4096
 boot_page_table1:
+	.skip 4096
+.global memory_page_table
+memory_page_table:
 	.skip 4096
 # Further page tables may be required if the kernel grows beyond 3 MiB.
 
@@ -71,7 +75,7 @@ _start:
 3:
 	# Map VGA video memory to 0xC03FF000 as "present, writable".
 	movl $(0x000B8000 | 0x003), boot_page_table1 - 0xC0000000 + 1023 * 4
-
+	
 	# The page table is used at both page directory entry 0 (virtually from 0x0
 	# to 0x3FFFFF) (thus identity mapping the kernel) and page directory entry
 	# 768 (virtually from 0xC0000000 to 0xC03FFFFF) (thus mapping it in the

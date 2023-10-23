@@ -5,7 +5,7 @@ CC:=$(CROSS_COMPILE)gcc
 all:
 	$(AS) boot.s -o boot.o
 	$(CC) -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
-	$(CC) -T linker.ld -o myos.bin -ffreestanding -O2 -nostdlib boot.o kernel.o -lgcc
+	$(CC) -T linker.ld -o myos.bin -ffreestanding -O2 boot.o kernel.o -nostartfiles
 
 .PHONY: boot
 boot:
