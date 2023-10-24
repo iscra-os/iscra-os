@@ -176,6 +176,8 @@ void outb(uint16_t port, uint8_t data) {
 	asm volatile("outb %0, %1" :: "a"(data), "Nd"(port) );
 }
 
+void init_gdt();
+void init_interrupts();
 
 void kernel_main(void) 
 {
@@ -183,7 +185,6 @@ void kernel_main(void)
     terminal_setcolor(vga_entry_color(VGA_COLOR_MAGENTA, VGA_COLOR_WHITE));
 	terminal_initialize();
 	/* Newline support is left as an exercise. */
-	printk("Hello, kernel World! %x\n", 1024);
 
 	for (size_t i = 0; i < 1024; ++i) {
 		memory_page_table[i] = (0x400000 + i * 4096) | 0b11;
@@ -193,12 +194,18 @@ void kernel_main(void)
 	program_break = (uint8_t*)0xC0400000;
 	program_break_limit = (uint8_t*)0xC0800000;
 
-	while(1) {
-		uint8_t status = 0;
-		while (!(status & 1)) {
-			status = inb(0x64);
-		}
-		char key = inb(0x60);
-		printk("%x\n", key);
-	}
+	init_gdt();
+
+	init_interrupts();
+
+	printk("Hello, kernel World! %x\n", 1024);
+
+	// while(1) {
+	// 	uint8_t status = 0;
+	// 	while (!(status & 1)) {
+	// 		status = inb(0x64);
+	// 	}
+	// 	char key = inb(0x60);
+	// 	printk("%x\n", key);
+	// }
 }
