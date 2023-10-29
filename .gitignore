@@ -1,2 +1,3 @@
 myos.bin
 *.o
+.vscode

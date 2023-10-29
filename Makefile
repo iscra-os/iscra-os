@@ -5,10 +5,14 @@ CXX:=$(CROSS_COMPILE)g++
 
 all:
 	$(AS) boot.s -o boot.o
-	$(CC) -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+	$(CXX) -c kernel.cpp -o kernel.o -ffreestanding -O2 -Wall -Wextra
 	$(CXX) -c gdt.cpp -o gdt.o -ffreestanding -O2 -Wall -Wextra
 	$(CXX) -c interrupts.cpp -o interrupts.o -ffreestanding -O2 -Wall -Wextra
-	$(CC) -T linker.ld -o myos.bin -ffreestanding -O2 boot.o kernel.o gdt.o interrupts.o -nostartfiles
+	$(CXX) -c terminal.cpp -o terminal.o -ffreestanding -O2 -Wall -Wextra
+	$(CXX) -c allocator.cpp -o allocator.o -ffreestanding -O2 -Wall -Wextra
+	$(CXX) -c stdlib.cpp -o stdlib.o -ffreestanding -O2 -Wall -Wextra
+	$(CXX) -c assembler.cpp -o assembler.o -ffreestanding -O2 -Wall -Wextra
+	$(CC) -T linker.ld -o myos.bin -ffreestanding -O2 boot.o kernel.o gdt.o interrupts.o terminal.o allocator.o stdlib.o assembler.o -nostartfiles
 
 .PHONY: boot
 boot:

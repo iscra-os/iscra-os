@@ -1,6 +1,8 @@
 // Used for creating GDT segment descriptors in 64-bit integer form.
 #include <cstdint>
- 
+#include "gdt.h"
+
+
 // Each define here is for a specific flag in the descriptor.
 // Refer to the intel documentation for a description of what each one does.
 #define SEG_DESCTYPE(x)  ((x) << 0x04) // Descriptor type (0 for system, 1 for code/data)
@@ -44,6 +46,7 @@
                      SEG_LONG(0)     | SEG_SIZE(1) | SEG_GRAN(1) | \
                      SEG_PRIV(3)     | SEG_DATA_RDWR
  
+
 uint64_t create_descriptor(uint32_t base, uint32_t limit, uint16_t flag) {
     uint64_t descriptor;
     
@@ -63,28 +66,13 @@ uint64_t create_descriptor(uint32_t base, uint32_t limit, uint16_t flag) {
     return descriptor;
 }
 
-enum segment_index {
-    segm_null = 0,
-    segm_kernel_code = 1,
-    segm_kernel_data = 2,
-    segm_user_code = 3,
-    segm_user_data = 4
-};
-
-enum segment_value {
-    kernel_cs = (segm_kernel_code * sizeof(uint64_t)) | 0,
-    kernel_ds = (segm_kernel_data * sizeof(uint64_t)) | 0,
-    user_cs = (segm_user_code * sizeof(uint64_t)) | 3,
-    user_ds = (segm_user_data * sizeof(uint64_t)) | 3
-};
-
 uint64_t gdt_table[5];
 
 // 0-15     size
 // 16-31    offset [low 16]   
 // 32-47    offset [high 16]
 
-extern "C" void init_gdt() {
+void init_gdt() {
     gdt_table[segm_null] = create_descriptor(0, 0, 0);
     gdt_table[segm_kernel_code] = create_descriptor(0, 0x000FFFFF, (GDT_CODE_PL0));
     gdt_table[segm_kernel_data] = create_descriptor(0, 0x000FFFFF, (GDT_DATA_PL0));
