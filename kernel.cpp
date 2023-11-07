@@ -2,6 +2,7 @@
 #include "terminal.h"
 #include "gdt.h"
 #include "interrupts.h"
+#include "vfs.h"
  
 #if !defined(__i386__)
 #error "This kernel needs to be compiled with a ix86-elf compiler"
@@ -18,6 +19,7 @@ extern "C" void kernel_main(void) {
     terminal_setcolor(vga_entry_color(VGA_COLOR_MAGENTA, VGA_COLOR_WHITE));
 	init_terminal();
 
+	init_vfs();
 
 	printk("Hello, kernel World! %x\n", 1024);
 

@@ -41,14 +41,10 @@ void terminal_writestring(const char* data) {
 	terminal_write(data, strlen(data));
 }
 
-
-int printk(const char* fmt, ...) {
+int vprintk(const char* fmt, va_list list) {
 	char buffer[512];
-	va_list list;
 
-	va_start(list, fmt);
 	int result = vsnprintf(buffer, sizeof(buffer), fmt, list);
-	va_end(list);
 
 	if (result < 0) {
 		terminal_writestring("Failed to format\n");
@@ -63,6 +59,30 @@ int printk(const char* fmt, ...) {
 
 	return result;
 }
+
+int printk(const char* fmt, ...) {
+	va_list list;
+
+	va_start(list, fmt);
+	int result = vprintk(fmt, list);
+	va_end(list);
+
+	return result;
+}
+
+[[noreturn]]
+void panic(const char* fmt, ...) {
+	va_list list;
+
+	va_start(list, fmt);
+	int result = vprintk(fmt, list);
+	va_end(list);
+
+	while (true)
+		asm volatile("hlt"); // halt
+}
+
+
 
 
 void init_terminal(void) {

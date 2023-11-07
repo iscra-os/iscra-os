@@ -4,12 +4,11 @@
 #include "terminal.h"
 
 void exception_handler_body(int n, ...) {
-    printk("Exception occured (vec = %d)", n);
-    while(1);
+    panic("Exception occured (vec = %d)", n);
 } 
 
 void interrupt_handler_body(int n, ...) {
-    printk("Interrupt occured (vec = %d)", n);
+    panic("Interrupt occured (vec = %d)", n);
 } 
 
 template <int I>
