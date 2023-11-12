@@ -224,6 +224,7 @@ extern "C" {
 
 void init_vfs() {
     new (&root) ramfs_directory("/");
+    new (&opened_files) std::unordered_map<int, vfs_entry*>();
 
     FILE* file = fopen("test.txt", "w");
     if (file == NULL)
