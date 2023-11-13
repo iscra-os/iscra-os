@@ -12,13 +12,7 @@ extern "C" {
 		terminal_writestring("lseek()\n");
 		while (1);
 	}
-	ssize_t read(int fd, void *buf, size_t count) {
-        (void)fd;
-        (void)buf;
-        (void)count;
-		terminal_writestring("read()\n");
-		while (1);
-	}
+
 
 	int isatty(int fd) {
 		panic("isatty()\n");

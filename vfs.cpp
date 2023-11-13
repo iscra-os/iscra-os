@@ -26,7 +26,9 @@ public:
     // File interfaces
     virtual bool open(open_mode mode);
     virtual bool truncate();
-    virtual size_t write(void* buffer, size_t size);
+    virtual size_t write(const void* buffer, size_t size);
+    virtual size_t read(void* buffer, size_t size);
+    virtual size_t size();
     virtual bool close();
 
     virtual bool is_file();
@@ -47,7 +49,13 @@ bool vfs_entry::is_file() {
 bool vfs_entry::truncate() {
     return false;
 }
-size_t vfs_entry::write(void* buffer, size_t size) {
+size_t vfs_entry::write(const void* buffer, size_t size) {
+    return 0;
+}
+size_t vfs_entry::read(void* buffer, size_t size) {
+    return 0;
+}
+size_t vfs_entry::size() {
     return 0;
 }
 bool vfs_entry::close() {
@@ -58,17 +66,25 @@ class ramfs_file : public vfs_entry {
     std::string _name;
     std::vector<uint8_t> _data;
     bool _opened;
+    open_mode _mode; 
+    size_t _position;
 public:
     ramfs_file(std::string name) : _name(std::move(name)), _opened(false) {}
 
     bool open(open_mode mode) override;
     bool is_file() override;
     bool truncate() override;
-    size_t write(void* buffer, size_t size) override;
+    size_t write(const void* buffer, size_t size) override;
+    size_t read(void* buffer, size_t size) override;
+    size_t size() override;
     bool close() override;
 };
 
 bool ramfs_file::open(open_mode mode) {
+    if (_opened)
+        return false;
+    _mode = mode;
+    _position = 0;
     _opened = true;
     return true;
 }
@@ -81,14 +97,52 @@ bool ramfs_file::truncate() {
     _data.clear();
     return true;
 }
-size_t ramfs_file::write(void* buffer, size_t size) {
+size_t ramfs_file::write(const void* buffer, size_t size) {
     if (!_opened)
-        return false;
-    _data.reserve(size);
-    memcpy(_data.data(), buffer, size);
+        return 0;
+    switch (_mode) {
+        case mode_write:
+        case mode_read_write:
+            break;
+
+        default:
+            return 0;
+    }
+
+    if (_position + size > _data.size())
+        _data.resize(_position + size);
+    memcpy(_data.data() + _position, buffer, size);
+    _position += size;
     return size;
 }
+size_t ramfs_file::read(void* buffer, size_t size) {
+    if (!_opened)
+        return 0;
+    switch (_mode) {
+        case mode_read:
+        case mode_read_write:
+            break;
+
+        default:
+            return 0;
+    }
+
+    size_t available = size;
+    if (_position + size > _data.size())
+        available = _data.size() - _position;
+
+    memcpy(buffer, _data.data() + _position, available);
+    _position += available;
+    return available;
+}
+
+size_t ramfs_file::size() {
+    return _data.size();
+}
+
 bool ramfs_file::close() {
+    if (!_opened)
+        return false;
     _opened = false;
     return true;
 }
@@ -194,25 +248,59 @@ extern "C" {
 	}
 
     int fstat(int fd, struct stat *statbuf) {
+        auto iter = opened_files.find(fd);
+        if (iter == opened_files.end()) {
+            errno = EBADF;
+            return -1;
+        }
+
+        statbuf->st_size = iter->second->size();
+
 		printk("fstat()\n");
-
-        statbuf->st_size = 0;
-
         return 0;
 	}
 
     ssize_t write(int fd, const void *buf, size_t count) {
-        (void)fd;
-        (void)buf;
-        (void)count;
+
+        auto iter = opened_files.find(fd);
+        if (iter == opened_files.end()) {
+            errno = EBADF;
+            return -1;
+        }
+
+        auto result = iter->second->write(buf, count);
 
 		printk("write()\n");
+        return result;
+	}
 
-        return count;
+    ssize_t read(int fd, void *buf, size_t count) {
+        auto iter = opened_files.find(fd);
+        if (iter == opened_files.end()) {
+            errno = EBADF;
+            return -1;
+        }
+
+        auto result = iter->second->read(buf, count);
+
+		printk("read(%d, %p, %d)\n", fd, buf, count, result);
+        return result;
 	}
 
     int close(int fd) {
-        (void)fd;
+
+        auto iter = opened_files.find(fd);
+        if (iter == opened_files.end()) {
+            errno = EBADF;
+            return -1;
+        }
+
+        if (!iter->second->close()) {
+            errno = EIO;
+            return -1;
+        }
+
+        opened_files.erase(iter);
 
 		printk("close()\n");
 
@@ -230,7 +318,18 @@ void init_vfs() {
     if (file == NULL)
         panic("Failed to open test.txt\n");
     
-    fputs("Hello\n", file);
+    fputs("Hello", file);
 
     fclose(file);
+
+    file = fopen("test.txt", "r");
+    if (file == NULL)
+        panic("Failed to open test.txt\n");
+    
+    char data[256];
+    fgets(data, sizeof(data), file);
+
+    fclose(file);
+
+    printk("Read data: \"%s\"\n", data);
 }
