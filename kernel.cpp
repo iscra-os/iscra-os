@@ -3,6 +3,7 @@
 #include "gdt.h"
 #include "interrupts.h"
 #include "vfs.h"
+#include "processes.h"
  
 #if !defined(__i386__)
 #error "This kernel needs to be compiled with a ix86-elf compiler"
@@ -20,6 +21,8 @@ extern "C" void kernel_main(void) {
 	init_terminal();
 
 	init_vfs();
+
+	init_processes();
 
 	printk("Hello, kernel World! %x\n", 1024);
 
