@@ -6,6 +6,8 @@
 // Each define here is for a specific flag in the descriptor.
 // Refer to the intel documentation for a description of what each one does.
 #define SEG_DESCTYPE(x)  ((x) << 0x04) // Descriptor type (0 for system, 1 for code/data)
+#define SEG_ACCESSED(x)      ((x) << 0x00) // Accessed
+#define SEG_EXEC(x)      ((x) << 0x03) // Executable
 #define SEG_PRES(x)      ((x) << 0x07) // Present
 #define SEG_SAVL(x)      ((x) << 0x0C) // Available for system use
 #define SEG_LONG(x)      ((x) << 0x0D) // Long mode
@@ -46,6 +48,9 @@
                      SEG_LONG(0)     | SEG_SIZE(1) | SEG_GRAN(1) | \
                      SEG_PRIV(3)     | SEG_DATA_RDWR
  
+#define GDT_TASK SEG_DESCTYPE(0) | SEG_PRES(1) | SEG_SAVL(0) | \
+                     SEG_LONG(0)     | SEG_SIZE(0) | SEG_GRAN(0) | \
+                     SEG_PRIV(0)     | SEG_DATA_RD | SEG_EXEC(1) | SEG_ACCESSED(1)
 
 uint64_t create_descriptor(uint32_t base, uint32_t limit, uint16_t flag) {
     uint64_t descriptor;
@@ -66,11 +71,21 @@ uint64_t create_descriptor(uint32_t base, uint32_t limit, uint16_t flag) {
     return descriptor;
 }
 
-uint64_t gdt_table[5];
+uint64_t gdt_table[6];
 
 // 0-15     size
 // 16-31    offset [low 16]   
 // 32-47    offset [high 16]
+
+static char stack[512];
+
+
+
+struct TSS {
+    uint32_t link;
+    uint32_t esp0;
+    uint32_t other_regs[25];
+} main_tss;
 
 void init_gdt() {
     gdt_table[segm_null] = create_descriptor(0, 0, 0);
@@ -78,8 +93,10 @@ void init_gdt() {
     gdt_table[segm_kernel_data] = create_descriptor(0, 0x000FFFFF, (GDT_DATA_PL0));
     gdt_table[segm_user_code] = create_descriptor(0, 0x000FFFFF, (GDT_CODE_PL3));
     gdt_table[segm_user_data] = create_descriptor(0, 0x000FFFFF, (GDT_DATA_PL3));
+    gdt_table[segm_task] = create_descriptor(reinterpret_cast<uint32_t>(&main_tss), sizeof(main_tss), (GDT_TASK));
 
-    
+    main_tss.esp0 = reinterpret_cast<uint32_t>(stack);
+
     struct [[gnu::packed]] {
         uint16_t size;
         uint32_t offset;
@@ -87,6 +104,8 @@ void init_gdt() {
         sizeof(gdt_table) - 1,
         reinterpret_cast<uint32_t>(&gdt_table)
     };
+
+    asm volatile("lgdt %0" :: "m"(gdtr));
 
     asm volatile("lgdt %0" :: "m"(gdtr));
     asm volatile(R"(
@@ -98,4 +117,6 @@ void init_gdt() {
     asm volatile("movl %0, %%fs" :: "r"(kernel_ds));
     asm volatile("movl %0, %%gs" :: "r"(kernel_ds));
     asm volatile("movl %0, %%ss" :: "r"(kernel_ds));
+
+    asm volatile("ltr %w0" :: "r"(tss_value));
 }

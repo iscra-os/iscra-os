@@ -2,6 +2,10 @@
 #include <list>
 #include <cstdint>
 #include "terminal.h"
+#include <vector>
+#include "gdt.h"
+#include "allocator.h"
+#include <string.h>
 
 struct register_frame {
     uint32_t edi;
@@ -17,35 +21,101 @@ struct register_frame {
 struct process {
     register_frame rframe;
     uint32_t eip;
+
+    uint32_t cs;
+    uint32_t ds;
+    uint32_t eflags; 
+
+    std::vector<uint8_t> stack;
+
+
 };
 
 process* current_process;
 std::list<process*> proccesses;
 
+process* create_process(uint32_t start, size_t allocate_stack, bool is_ring0) {
+    auto new_process = new process();
 
-void exit_to_current_process() {
-    auto eip_stack_ptr = reinterpret_cast<uint32_t*>(current_process->rframe.esp);
+    if (allocate_stack) {
+        new_process->stack.resize(allocate_stack);
+        new_process->rframe.esp = reinterpret_cast<uint32_t>(new_process->stack.data() + allocate_stack);
+    }
 
-    // <- esp
-    // eip
+    new_process->eip = start;
+
+    uint32_t cs = user_cs;
+    uint32_t ds = user_ds;
+    if (is_ring0) {
+        cs = kernel_cs;
+        ds = kernel_ds;
+    }
+    new_process->cs = cs;
+    new_process->ds = ds;
     
-    --eip_stack_ptr;
-    *eip_stack_ptr = current_process->eip;
 
-    auto rframe_stack_ptr = reinterpret_cast<register_frame*>(eip_stack_ptr);
-    --rframe_stack_ptr; // -8*4 
-    *rframe_stack_ptr = current_process->rframe;
+    proccesses.push_back(new_process);
+    return new_process;
+}
+
+class StackOperator {
+    uint8_t* _ptr;
+public:
+    StackOperator(uint8_t* ptr) : _ptr(ptr) {}
+
+    template <typename T>
+    uint8_t* push(const T& value) {
+        auto ptr = reinterpret_cast<T*>(_ptr);
+        --ptr;
+        *ptr = value;
+        _ptr = reinterpret_cast<uint8_t*>(ptr);
+        return _ptr;
+    }
+};
+
+
+struct interrupt_frame {
+    uint32_t eip;
+    uint32_t cs;
+    uint32_t eflags; 
+};
+
+struct interrupt_frame_ext {
+    interrupt_frame base;
+    uint32_t esp;
+    uint32_t ss;
+};
+void exit_to_current_process() {
+    bool is_ring0 = (current_process->cs & 0b11) == 0;
+
+    StackOperator so(reinterpret_cast<uint8_t*>(current_process->rframe.esp));
+
+    interrupt_frame iframe_base {
+        current_process->eip,
+        current_process->cs,
+        current_process->eflags
+    };    
+    if (is_ring0) {
+        so.push(iframe_base);
+    } else {
+        interrupt_frame_ext iframe {
+            iframe_base,
+            current_process->rframe.esp,
+            current_process->ds
+        };
+        so.push(iframe);
+    }
+
+    auto esp = so.push(current_process->rframe);
 
     asm volatile(R"(
         movl %0, %%esp
         popa
-        ret 
-    )" :: "m"(rframe_stack_ptr));
+        iret 
+    )" :: "m"(esp));
 }
 
 void yield_internal(register_frame rframe, uint32_t eip) {
-    printk("%08X\n", rframe.eax);
-
     current_process->rframe = rframe;
     current_process->rframe.esp += sizeof(uint32_t);
     current_process->eip = eip;
@@ -66,7 +136,6 @@ void yield() {
 }
 //          push (8*4)(%%esp)  ; push(*(esp + 8*4))
 
-char stack[256];
 
 void func_p2() {
     printk("I was called\n");
@@ -79,15 +148,18 @@ void func_p2() {
 void init_processes() {
     new (&proccesses) std::list<process*>;
     
-    current_process = new process();
-    proccesses.push_back(current_process);
-
-    auto p2 = new process();
-    p2->eip = reinterpret_cast<uint32_t>(func_p2);
-    p2->rframe.esp = reinterpret_cast<uint32_t>(stack + sizeof(stack));
-    proccesses.push_back(p2);
+    current_process = create_process(0, 0, true);
 
     
+    memcpy(
+        USER_SEG_BASE, 
+        reinterpret_cast<void*>(func_p2),
+        256
+        );
+    
+    auto p2 = create_process(reinterpret_cast<uint32_t>(USER_SEG_BASE), 0, false);
+    p2->rframe.esp = reinterpret_cast<uint32_t>(USER_SEG_BASE) + 256 + 1024;
+
     // <- esp
     // reg7
     // reg6
@@ -107,5 +179,5 @@ void init_processes() {
     printk("I was called B\n");
     yield();
 
-    printk("x");
+    printk("All done\n");
 }
