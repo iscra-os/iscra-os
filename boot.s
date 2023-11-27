@@ -28,9 +28,6 @@ boot_page_directory:
 	.skip 4096
 boot_page_table1:
 	.skip 4096
-.global memory_page_table
-memory_page_table:
-	.skip 4096
 # Further page tables may be required if the kernel grows beyond 3 MiB.
 
 # The kernel entry point.
