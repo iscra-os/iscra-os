@@ -1,3 +1,4 @@
 myos.bin
 *.o
 .vscode
+isodir/
